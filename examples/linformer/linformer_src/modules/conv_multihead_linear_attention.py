@@ -1,7 +1,16 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
+# Copyright 2021 FBK
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License
 
 import math
 from typing import Dict, Optional, Tuple
@@ -16,12 +25,14 @@ from torch.nn import Parameter
 
 
 @with_incremental_state
-class MultiheadLinearAttention(nn.Module):
-    """Multi-headed linformer attention.
+class ConvAttention(nn.Module):
+    """ConvAttention
 
-    Projects the key and values down to the compressed dimension, before computing self-attention.
+    Projects the key and values down to the compressed dimension before computing self-attention
+    by means of a 1D Convolutional layer. The stride of the convolution (compression factor)
+    controls the compressed dimension.
 
-    See "Linformer: Self-Attention with Linear Complexity" for more details.
+    See "Speechformer: Reducing Information Loss in Direct Speech Translation" for more details.
     """
 
     def __init__(
@@ -39,10 +50,10 @@ class MultiheadLinearAttention(nn.Module):
         q_noise=0.0,
         qn_block_size=8,
         compressed=1,
-        max_seq_len=256,
-        shared_kv_compressed=0,
+        shared_kv_compressed=True,
         shared_compress_layer=None,
-        freeze_compress=0,
+        freeze_compress=False,
+        compress_kernel_size=1,
     ):
         super().__init__()
         self.embed_dim = embed_dim
@@ -76,17 +87,26 @@ class MultiheadLinearAttention(nn.Module):
         )
         # used for compress sequence to subsequence
         if shared_compress_layer is None:
-            self.compress_seq_len = max_seq_len // compressed
-            self.compress_k = nn.Linear(max_seq_len, self.compress_seq_len, bias=False)
-            if shared_kv_compressed == 0:
-                self.compress_v = nn.Linear(
-                    max_seq_len, self.compress_seq_len, bias=False
-                )
+            self.compress_k = nn.Conv1d(
+                embed_dim,
+                embed_dim,
+                compress_kernel_size,
+                stride=compressed,
+                padding=compress_kernel_size // 2,
+            )
+            if not shared_kv_compressed:
+                self.compress_v = nn.Conv1d(
+                embed_dim,
+                embed_dim,
+                compress_kernel_size,
+                stride=compressed,
+                padding=compress_kernel_size // 2,
+            )
             self.layerwise_sharing = False
         else:
             self.shared_compression_among_layers = True
             self.compress_k = [shared_compress_layer]
-            if shared_kv_compressed == 0:
+            if not shared_kv_compressed:
                 self.compress_v = [shared_compress_layer]
             self.layerwise_sharing = True
         self.shared_kv_compressed = shared_kv_compressed
@@ -105,9 +125,9 @@ class MultiheadLinearAttention(nn.Module):
 
         self.reset_parameters()
 
-        if freeze_compress == 1:
+        if freeze_compress:
             self.compress_k.weight.requires_grad = False
-            if shared_kv_compressed == 0:
+            if not shared_kv_compressed:
                 self.compress_v.weight.requires_grad = False
 
         self.onnx_trace = False
@@ -126,7 +146,7 @@ class MultiheadLinearAttention(nn.Module):
                 not self.layerwise_sharing
             ):  # otherwise, we already initialize the parameters
                 nn.init.xavier_uniform_(self.compress_k.weight, gain=1 / math.sqrt(2))
-                if self.shared_kv_compressed == 0:
+                if not self.shared_kv_compressed:
                     nn.init.xavier_uniform_(
                         self.compress_v.weight, gain=1 / math.sqrt(2)
                     )
@@ -138,7 +158,7 @@ class MultiheadLinearAttention(nn.Module):
                 not self.layerwise_sharing
             ):  # otherwise, we already initialize the parameters
                 nn.init.xavier_uniform_(self.compress_k.weight)
-                if self.shared_kv_compressed == 0:
+                if not self.shared_kv_compressed:
                     nn.init.xavier_uniform_(self.compress_v.weight)
 
         nn.init.xavier_uniform_(self.out_proj.weight)
@@ -184,11 +204,11 @@ class MultiheadLinearAttention(nn.Module):
 
         if self.layerwise_sharing:
             compress_k = self.compress_k[0]
-            if self.shared_kv_compressed == 0:
+            if not self.shared_kv_compressed:
                 compress_v = self.compress_v[0]
         else:
             compress_k = self.compress_k
-            if self.shared_kv_compressed == 0:
+            if not self.shared_kv_compressed:
                 compress_v = self.compress_v
 
         tgt_len, bsz, embed_dim = query.size()
@@ -211,22 +231,22 @@ class MultiheadLinearAttention(nn.Module):
 
             k_input = query.permute(1, 2, 0).contiguous()  # B * C * T
             k_input = (
-                F.linear(k_input, compress_k.weight[:, 0:tgt_len])
+                compress_k(k_input)
                 .permute(2, 0, 1)
                 .contiguous()
             )
             k = self.k_proj(k_input)
 
             v_input = query.permute(1, 2, 0).contiguous()  # B * C * T
-            if self.shared_kv_compressed == 0:
+            if not self.shared_kv_compressed:
                 v_input = (
-                    F.linear(v_input, compress_v.weight[:, 0:tgt_len])
+                    compress_v(v_input)
                     .permute(2, 0, 1)
                     .contiguous()
                 )
-            if self.shared_kv_compressed == 1:  # use shared kv compressed linear layer
+            if self.shared_kv_compressed:
                 v_input = (
-                    F.linear(v_input, compress_k.weight[:, 0:tgt_len])
+                    compress_k(v_input)
                     .permute(2, 0, 1)
                     .contiguous()
                 )
@@ -307,7 +327,7 @@ class MultiheadLinearAttention(nn.Module):
             if "prev_key_padding_mask" in saved_state:
                 prev_key_padding_mask = saved_state["prev_key_padding_mask"]
             assert k is not None and v is not None
-            key_padding_mask = MultiheadLinearAttention._append_prev_key_padding_mask(
+            key_padding_mask = ConvAttention._append_prev_key_padding_mask(
                 key_padding_mask=key_padding_mask,
                 prev_key_padding_mask=prev_key_padding_mask,
                 batch_size=bsz,
@@ -335,7 +355,7 @@ class MultiheadLinearAttention(nn.Module):
                 )
 
         attn_weights = torch.bmm(q, k.transpose(1, 2))
-        attn_weights = MultiheadLinearAttention.apply_sparse_mask(
+        attn_weights = ConvAttention.apply_sparse_mask(
             attn_weights, tgt_len, src_len, bsz
         )
 
@@ -455,6 +475,7 @@ class MultiheadLinearAttention(nn.Module):
     ):
         return self.set_incremental_state(incremental_state, "attn_state", buffer)
 
+    @staticmethod
     def apply_sparse_mask(attn_weights, tgt_len: int, src_len: int, bsz: int):
         return attn_weights
 
