@@ -1,3 +1,9 @@
+# FBK-fairseq
+
+This repository contains the code for the following published papers:
+- [Speechformer: Reducing Information Loss in Direct Speech Translation]()
+- [Dealing with training and test segmentation mismatch: FBK@ IWSLT2021](https://aclanthology.org/2021.iwslt-1.8.pdf)
+
 # Speechformer
 This repository contains the code for the preprocessing, training and evaluation steps of the `PlainConvattention` and 
 `Speechformer` architectures as well as the pretrained models.
