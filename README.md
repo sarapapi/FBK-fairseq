@@ -36,7 +36,8 @@ python ${FAIRSEQ_DIR}/examples/speech_to_text/preprocess_generic.py \
 script again changing `--vocab-size 8000` to `--vocab-size 5000`, with the option 
 `--no-filterbank-extraction` to avoid the re-computation of the mel-filterbank features. 
 
-##Training 
+## Training 
+
 In the following, there are the scripts for training both `PlainConvattention` and `Speechformer` architectures.
 
 ⭐️**Please note** that the training phase of `PlainConvattention` (which corresponds to the encoder pretraining of the 
