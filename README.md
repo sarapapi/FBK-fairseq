@@ -16,14 +16,20 @@ For the experiments we used MuST-C (en-de, en-es, en-nl), make sure to [download
 
 ## Preprocessing
 Before starting the training, the data has to be preprocessed.
-To preprocess the data, run the following command, where
-`DATA_ROOT` is the language-specific MuST-C 
-directory, by `FAIRSEQ_DIR` is the path to this Fairseq installation and by `MUSTC_SAVE_DIR` is the path where you want to 
-save the preprocessed files:
+After downloading the MuST-C dataset into the `MUSTC_ROOT` directory, create your working directory `DATA_ROOT` and link there the data for the target language `LANG` to be preprocessed, with the command
+
+```
+mkdir $DATA_ROOT
+for t in train dev tst-COMMON; do
+  ln -s ${MUSTC_ROOT}en-$LANG/data/$t/txt/$t.* $DATA_ROOT
+done
+```
+
+Once your `DATA_ROOT` is ready, run the following command to preprocess the data, where `FAIRSEQ_DIR` is the path to this Fairseq installation and `MUSTC_SAVE_DIR` is the path where you want to save the preprocessed files (it can be equal to `DATA_ROOT`):
 
 ```sh
 python ${FAIRSEQ_DIR}/examples/speech_to_text/preprocess_generic.py \
-  --data-root ${DATA_ROOT} --wav-dir ${DATA_ROOT}/wav \
+  --data-root ${DATA_ROOT} --wav-dir ${MUSTC_ROOT}/wav \
   --save-dir ${MUSTC_SAVE_DIR} \
   --task st --src-lang en --tgt-lang ${LANG} \
   --splits train dev tst-COMMON \
