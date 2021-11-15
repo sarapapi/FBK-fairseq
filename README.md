@@ -1,14 +1,14 @@
 # FBK-fairseq
 
 This repository contains the code for the following published papers:
-- [Speechformer: Reducing Information Loss in Direct Speech Translation]()
+- [Speechformer: Reducing Information Loss in Direct Speech Translation](https://aclanthology.org/2021.emnlp-main.127/)
 - [Dealing with training and test segmentation mismatch: FBK@ IWSLT2021](https://aclanthology.org/2021.iwslt-1.8.pdf)
 
 # Speechformer
 This repository contains the code for the preprocessing, training and evaluation steps of the `PlainConvattention` and 
 `Speechformer` architectures as well as the pretrained models.
 
-For further details, please refer to the paper: [Speechformer: Reducing Information Loss in Direct Speech Translation](https://arxiv.org/).
+For further details, please refer to the paper: [Speechformer: Reducing Information Loss in Direct Speech Translation](https://aclanthology.org/2021.emnlp-main.127/).
 
 ## Setup
 Clone this repository and install it as explained in the original [Fairseq(-py)](https://github.com/pytorch/fairseq).
