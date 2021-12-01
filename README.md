@@ -48,7 +48,9 @@ In the following, there are the scripts for training both `PlainConvattention` a
 
 ⭐️**Please note** that the training phase of `PlainConvattention` (which corresponds to the encoder pretraining of the 
 Speechformer) is *mandatory* to successfully train the `Speechformer` architecture.
-###PlainConvattention
+
+### PlainConvattention
+
 To start the training of the `PlainConvattention` architecture, run the following command, where `ST_SAVE_DIR` is the directory in which you 
 want to save the trained model and `CONFIG_YAML_NAME` is the name of the .yaml file:
 ```sh
